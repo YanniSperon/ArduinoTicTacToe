@@ -1,10 +1,12 @@
 #include <Wire.h>
  
+// Define I2C addresses to setup communication
 #define SLAVE_START_ADDR 8
-// Define Slave I2C Address
+// When uploading to Arduino, set this to either 1 or 2
 #define SLAVE_OFFSET 1
 #define SLAVE_FINAL_ADDR (SLAVE_START_ADDR + SLAVE_OFFSET)
 
+// Define where the LEDs start
 #define LED_START_PIN 5
 #define CONTROL_PIN 2
  
@@ -12,6 +14,7 @@
 #define LED_PINS 9
 #define DATA_SIZE (LED_PINS + 1)
  
+// Initialization code
 void setup() {
  
   // Initialize I2C communications as Slave
@@ -27,13 +30,16 @@ void setup() {
   Serial.begin(9600);
   Serial.println("I2C Slave Demonstration");
 
+  // Setup all the outpout pins
   pinMode(CONTROL_PIN, OUTPUT);
   for (int i = 0; i < LED_PINS; ++i) {
     pinMode(LED_START_PIN + i, OUTPUT);
   }
 }
- 
+
+// Triggered when the controller transmits data to this worker
 void receiveEvent() {
+  // Read the transmission
   byte receivedTransmission[DATA_SIZE + 1];
   for (int i = 0; i < DATA_SIZE + 1; ++i)
   {
@@ -43,6 +49,7 @@ void receiveEvent() {
   // Read while data received
   while (0 < Wire.available()) {
     if (index < 10) {
+      // Any bytes over the first 10 just ignore
       byte in = Wire.read();
       receivedTransmission[index] = in;
       index++;
@@ -52,6 +59,7 @@ void receiveEvent() {
     }
   }
   
+  // Output high to an LED if the byte at that location contains its SLAVE_OFFSET bit (1 or 2)
   for (int i = 0; i < LED_PINS; ++i) {
     if (receivedTransmission[i] & SLAVE_OFFSET) {
       digitalWrite(LED_START_PIN + i, HIGH);
@@ -61,15 +69,10 @@ void receiveEvent() {
     }
   }
 
-  // Always output high on the control pin while only 1 controller connected
-  //if (receivedTransmission[LED_PINS] & SLAVE_OFFSET) {
-    digitalWrite(CONTROL_PIN, HIGH);
-  //}
-  //else
-  //{
-  //  digitalWrite(CONTROL_PIN, LOW);
-  //}
+  // Unused, originally supposed to be for deciding to use controller 1 or 2
+  digitalWrite(CONTROL_PIN, HIGH);
 
+  // Output the state to the Serial monitor for debugging
   Serial.println("Receive event on slave " + SLAVE_FINAL_ADDR);
   Serial.print("    Read: [");
   for (int i = 0; i < DATA_SIZE; ++i) {
@@ -82,9 +85,9 @@ void receiveEvent() {
   }
   Serial.println("]");
 }
- 
+
+// Triggered when the worker is replying to a request, not currently used anywhere in our code
 void requestEvent() {
- 
   // Setup byte variable in the correct size
   byte response[DATA_SIZE];
   
@@ -99,6 +102,7 @@ void requestEvent() {
   // Print to Serial Monitor
   Serial.println("Request event from slave " + SLAVE_FINAL_ADDR);
 }
- 
+
+// Looping code, we do not need to do anything here
 void loop() {
 }

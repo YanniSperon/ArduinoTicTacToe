@@ -1,34 +1,41 @@
 #include <Wire.h>
-// include the LCD library code
+// include the LCD library code for the score keeper
 #include <LiquidCrystal.h>
  
 // Define Slave I2C Address
 #define SLAVE_START_ADDR 8
 
+// Define the I2C address offset of the two controller Arduinos
 #define SLAVE_1_OFFSET 1
 #define SLAVE_2_OFFSET 2
 
+// Define the final I2C address of the two controller Arduinos
 #define SLAVE_1_FINAL_ADDR SLAVE_START_ADDR + SLAVE_1_OFFSET
 #define SLAVE_2_FINAL_ADDR SLAVE_START_ADDR + SLAVE_2_OFFSET
  
+// Define the data packet being sent between Arduinos
 #define NUM_LEDS 9
 #define DATA_SIZE NUM_LEDS + 1
 
+// Defines the number of controller buttons
 #define NUM_BUTTONS 5
 // Button pins start here and count down in the order specified with the
 // button debounce definitions
 #define BUTTON_START_PIN 13
 
+// The current board state
 byte boardState[DATA_SIZE];
 
+// The cursor location
 int cursorHorizontalPosition;
 int cursorVerticalPosition;
 
+// Game stats
 int p1Wins;
 int p2Wins;
 int ties;
 
-// 0 is select, 1 is up, 2 is down, 3 is left, 4 is right
+// indices: 0 is right button, 1 is left button, 2 is select button, 3 is down button, 4 is up button
 int buttonState[NUM_BUTTONS];
 int lastButtonState[NUM_BUTTONS];
 
@@ -44,15 +51,17 @@ bool isCursorOffFromBlink;
 const unsigned long blinkingTimerDuration = 250;
 const unsigned long blinkingTimerDurationAlreadySelected = 500;
 
-// Timer for debouncing
+// Timers for debouncing
 unsigned long lastDebounceTime[NUM_BUTTONS];
 const unsigned long debounceDelay = 50;
 
+// Game over timer
 bool shouldReset = false;
 unsigned long lastResetTimerStart;
 unsigned long lastResetTimerCurr;
 const unsigned long resetTimerDuration = 1000;
 
+// Store the stats LCD output
 char LCDLine1[16];
 char LCDLine2[16];
 
@@ -66,11 +75,13 @@ byte getPositionState(int verticalPos, int horizontalPos)
   return boardState[horizontalPos + (verticalPos * 3)];
 }
 
+// Returns whether a player holds a position or not
 bool doesPlayerHoldPosition(byte player, int verticalPos, int horizontalPos)
 {
   return getPositionState(verticalPos, horizontalPos) == player;
 }
 
+// Returns true if a player has won through the horizontal rules
 bool checkHorizontalWin(byte player)
 {
   for (int i = 0; i < 3; ++i)
@@ -84,6 +95,7 @@ bool checkHorizontalWin(byte player)
   return false;
 }
 
+// Returns true if a player has won through the vertical rules
 bool checkVerticalWin(byte player)
 {
   for (int i = 0; i < 3; ++i)
@@ -97,6 +109,7 @@ bool checkVerticalWin(byte player)
   return false;
 }
 
+// Returns true if a player has won through the diagonal rules
 bool checkDiagonalWin(byte player)
 {
   if ((doesPlayerHoldPosition(player, 0, 0) && doesPlayerHoldPosition(player, 1, 1) && doesPlayerHoldPosition(player, 2, 2)) || 
@@ -107,6 +120,7 @@ bool checkDiagonalWin(byte player)
   return false;
 }
 
+// Returns true if the board still has any open spots
 bool isAnyOpenSpot()
 {
   for (int i = 0; i < 9; ++i)
@@ -141,6 +155,7 @@ int findWinner()
   }
 }
 
+// Resets a board to a starting state
 void resetGame()
 {
   for (int i = 0; i < NUM_LEDS; ++i)
@@ -175,6 +190,7 @@ bool attemptPlace(byte player, int verticalPos, int horizontalPos)
   }
 }
 
+// Attempts to make a turn given the current cursor location
 void attemptMakeTurn()
 {
   if (attemptPlace(boardState[NUM_LEDS], cursorVerticalPosition, cursorHorizontalPosition))
@@ -191,6 +207,7 @@ void attemptMakeTurn()
     int winner = findWinner();
     if (winner == -1)
     {
+      // Wrap around ties to prevent too large of a number
       ties++;
       if (ties >= 100)
       {
@@ -199,6 +216,7 @@ void attemptMakeTurn()
     }
     else if (winner == 1)
     {
+      // Wrap around wins to prevent too large of a number
       p1Wins++;
       if (p1Wins >= 100)
       {
@@ -207,6 +225,7 @@ void attemptMakeTurn()
     }
     else if (winner == 2)
     {
+      // Wrap around wins to prevent too large of a number
       p2Wins++;
       if (p2Wins >= 100)
       {
@@ -216,17 +235,20 @@ void attemptMakeTurn()
 
     if (winner != 0)
     {
+      // If there is a winner
       shouldReset = true;
       lastResetTimerStart = millis();
     }
   }
 }
 
+// Returns true if the board state should blink differently (we are over one of our own already selected locations)
 bool shouldBlinkFast()
 {
   return boardState[(cursorVerticalPosition * 3) + cursorHorizontalPosition] == boardState[NUM_LEDS];
 }
 
+// Attempts to move the cursor left
 void moveCursorLeft()
 {
   cursorHorizontalPosition--;
@@ -236,6 +258,7 @@ void moveCursorLeft()
   }
 }
 
+// Attempts to move the cursor right
 void moveCursorRight()
 {
   cursorHorizontalPosition++;
@@ -245,6 +268,7 @@ void moveCursorRight()
   }
 }
 
+// Attempts to move the cursor up
 void moveCursorUp()
 {
   cursorVerticalPosition--;
@@ -254,6 +278,7 @@ void moveCursorUp()
   }
 }
 
+// Attempts to move the cursor down
 void moveCursorDown()
 {
   cursorVerticalPosition++;
@@ -263,31 +288,9 @@ void moveCursorDown()
   }
 }
 
-// 0 is select, 1 is up, 2 is down, 3 is left, 4 is right
+// Attempts to press the button with index i
 void buttonPressed(int i)
 {
-  //Serial.println("Button pressed");
-  //switch (i) {
-  //  case 0:
-  //    attemptMakeTurn();
-  //    break;
-  //  case 1:
-  //    moveCursorUp();
-  //    break;
-  //  case 2:
-  //    moveCursorDown();
-  //    break;
-  //  case 3:
-  //    moveCursorLeft();
-  //    break;
-  //  case 4:
-  //    moveCursorRight();
-  //    break;
-  //  default:
-  //    break;
-  //}
-
-  // TEMP
   switch (i) {
     case 0:
       moveCursorRight();
@@ -309,11 +312,13 @@ void buttonPressed(int i)
   }
 }
 
+// Sends data over I2C to the workers
 void dispatchDataToSlaves()
 {
   byte prevCursorState = boardState[(cursorVerticalPosition * 3) + cursorHorizontalPosition];
   if (isCursorOffFromBlink && !shouldReset)
   {
+    // Only blink if the game is not over, and the blink timer indicates we should
     if (boardState[(cursorVerticalPosition * 3) + cursorHorizontalPosition] == boardState[NUM_LEDS])
     {
       boardState[(cursorVerticalPosition * 3) + cursorHorizontalPosition] = 0;
@@ -333,6 +338,7 @@ void dispatchDataToSlaves()
   boardState[(cursorVerticalPosition * 3) + cursorHorizontalPosition] = prevCursorState;
 }
 
+// Initialization code
 void setup() {
   // Initialize I2C communications as Slave
   Wire.begin(SLAVE_1_FINAL_ADDR);
@@ -370,6 +376,7 @@ void setup() {
   lastResetTimerStart = millis();
   shouldReset = false;
 
+  // Button default states
   for (int i = 0; i < NUM_BUTTONS; ++i)
   {
     buttonState[i] = LOW;
@@ -377,12 +384,15 @@ void setup() {
     lastDebounceTime[i] = 0;
   }
   
+  // LCD default state
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Initializing");
 }
 
+// Looping code
 void loop() {
+  // Debounce buttons
   for (int i = 0; i < NUM_BUTTONS; ++i)
   {
     int reading = digitalRead(BUTTON_START_PIN - i);
@@ -405,6 +415,7 @@ void loop() {
         buttonState[i] = reading;
         Serial.println("Reading has changed");
         if (buttonState[i] == HIGH) {
+          // Trigger a button press
           Serial.println("Button pressed");
           buttonPressed(i);
         }
@@ -413,6 +424,7 @@ void loop() {
     lastButtonState[i] = reading;
   }
 
+  // Transmit the data to the workers if the timer has ended
   transmitTimerCurr = millis();
   if ((transmitTimerCurr - transmitTimerStart) >= transmitTimerDuration)
   {
@@ -425,6 +437,7 @@ void loop() {
     transmitTimerStart = transmitTimerCurr;
   }
 
+  // Blink the cursor if we should at either the fast rate or the slow rate depending on the situation
   blinkingTimerCurr = millis();
   bool shouldBeBlinkingFast = shouldBlinkFast();
   if ((((blinkingTimerCurr - blinkingTimerStart) >= blinkingTimerDuration) && !shouldBeBlinkingFast) || (((blinkingTimerCurr - blinkingTimerStart) >= blinkingTimerDurationAlreadySelected) && shouldBeBlinkingFast))
@@ -433,6 +446,7 @@ void loop() {
     blinkingTimerStart = blinkingTimerCurr;
   }
 
+  // If we should reset the game, start the reset timer before ultimately resetting
   if (shouldReset)
   {
     lastResetTimerCurr = millis();
