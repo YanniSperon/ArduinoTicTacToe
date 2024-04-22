@@ -1,3 +1,11 @@
+/*
+Names: Yanni Speron, Ele Berri, Maaz Iqbal
+NetIDs: yspero2@uic.edu, eberr6@uic.edu, miqba4@uic.edu
+Project Name: Tic-Tac-Toe-Two
+Abstract: Two players play a classic game of tic-tac-toe without any setup or clean up required. Players press buttons to move their cursor to the spot they want, then press the select button. The central game Arduino accepts the button selection and determines the game state. Upon the game ending, the Winner (or Draw) is printed onto the LCD.
+*/
+
+// Include Wire.h for I2C communication
 #include <Wire.h>
 // include the LCD library code for the score keeper
 #include <LiquidCrystal.h>
